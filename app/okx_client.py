@@ -76,7 +76,15 @@ class OKXClient:
 
     # ---------- trading ----------
     def create_limit_order(self, symbol, side, amount, price):
-        return self.exchange.create_order(symbol, "limit", side, amount, price)
+        # tdMode 'cash' forces plain spot trading (spend what you have).
+        # Without this, OKX can default to a margin trade mode, which
+        # tries to BORROW instead of spending your spot USDT -- that's
+        # what causes "available margin too low for borrowing" errors
+        # even when your spot wallet has plenty of balance.
+        return self.exchange.create_order(
+            symbol, "limit", side, amount, price,
+            params={"tdMode": "cash"},
+        )
 
     def cancel_order(self, order_id, symbol):
         return self.exchange.cancel_order(order_id, symbol)

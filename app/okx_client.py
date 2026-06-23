@@ -34,6 +34,40 @@ class OKXClient:
             log.warning("OKX client running in LIVE mode. Real funds at risk.")
 
         self.exchange.load_markets()
+        self._check_account_mode()
+
+    def _check_account_mode(self):
+        """OKX's account-wide trading mode (acctLv) determines whether a
+        'cash' (tdMode=cash) order is honoured as plain spot, or still
+        gets evaluated against margin/borrowing rules. If the account is
+        not in Spot mode, OKX will reject cash spot orders with a
+        borrowing-related error even when tdMode is set correctly and
+        the spot wallet has funds. This check surfaces that immediately
+        instead of letting it look like a code bug."""
+        try:
+            resp = self.exchange.private_get_account_config()
+            data = (resp.get("data") or [{}])[0]
+            acct_lv = data.get("acctLv")
+            labels = {
+                "1": "Spot mode",
+                "2": "Single-currency margin",
+                "3": "Multi-currency margin",
+                "4": "Portfolio margin",
+            }
+            label = labels.get(acct_lv, f"unknown ({acct_lv})")
+            if acct_lv != "1":
+                log.error(
+                    "OKX account mode is '%s', not Spot mode. Spot 'cash' "
+                    "orders will be rejected with borrowing errors until "
+                    "you switch to Spot mode in OKX: Assets -> Account "
+                    "Mode (do this in the SAME environment, demo or live, "
+                    "that DEMO_MODE is currently pointing at).",
+                    label,
+                )
+            else:
+                log.info("OKX account mode confirmed: %s", label)
+        except Exception as e:
+            log.warning("Could not verify account mode (continuing anyway): %s", e)
 
     # ---------- account ----------
     def get_balance(self, currency=None):
